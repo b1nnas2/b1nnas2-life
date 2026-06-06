@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>인생</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background-color: #111; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        
+        #game-container { position: relative; width: 800px; height: 600px; box-shadow: 0 0 20px rgba(0,0,0,0.8); background-color: #222; }
+        #gameCanvas { display: block; }
+        .hidden { display: none !important; }
+
+        #title-screen { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('lifetitle.png');
+            background-size: cover; background-position: center; background-color: #050505; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            z-index: 200; transition: opacity 1s ease;
+        }
+        #start-btn { padding: 15px 40px; font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.7); color: white; border: 2px solid white; cursor: pointer; border-radius: 5px; margin-top: 150px; }
+        #start-btn:hover { background: white; color: black; }
+
+        /* 대화창 UI */
+        #dialogue-box { position: absolute; bottom: 20px; left: 20px; width: 760px; height: 160px; background-color: rgba(0, 0, 0, 0.9); border: 3px solid #fff; border-radius: 5px; display: flex; z-index: 10; }
+        #portrait { position: absolute; bottom: 0; left: 20px; width: 140px; height: auto; z-index: 11; }
+        #dialogue-content { margin-left: 180px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
+        #speaker-name { font-size: 18px; font-weight: bold; color: #ffeb3b; }
+        #dialogue-text { font-size: 16px; line-height: 1.5; }
+        .next-arrow { text-align: right; font-size: 12px; color: #aaa; }
+
+        /* 인벤토리 UI */
+        #inventory-box { position: absolute; top: 20px; right: 20px; display: flex; gap: 8px; z-index: 5; }
+        .slot { width: 55px; height: 55px; background: rgba(0, 0, 0, 0.8); border: 2px solid #aaa; border-radius: 5px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; position: relative; }
+        .slot-slotname { font-size: 9px; color: #ccc; margin-top: 2px; }
+
+        /* 상호작용 안내 가이드 */
+        #action-guide { position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); border: 1px solid #ffeb3b; padding: 8px 20px; border-radius: 20px; font-size: 14px; color: #ffeb3b; z-index: 9; }
+
+        /* 선택지 UI */
+        #choice-ui { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 15, 0.95); border: 2px solid #ffeb3b; padding: 25px; width: 420px; text-align: center; z-index: 20; border-radius: 5px; }
+        .choice-ui-title { font-size: 16px; margin-bottom: 20px; color: #fff; line-height: 1.5; }
+        .choice-buttons-layout { display: flex; flex-direction: column; gap: 10px; }
+        .game-btn { padding: 12px; background: #222; color: white; border: 1px solid #666; cursor: pointer; border-radius: 3px; font-weight: bold; }
+        .game-btn:hover { background: #ffeb3b; color: #000; border-color: #ffeb3b; }
+        .danger-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
+
+        #fade-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: black; opacity: 1; pointer-events: none; transition: opacity 1.5s ease; z-index: 100; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="title-screen">
+            <button id="start-btn">게임 시작하기</button>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="action-guide" class="hidden">💡 무언가 반짝인다... (Space바 조사)</div>
+
+        <div id="inventory-box" class="hidden">
+            <div class="slot" id="slot-0">➖<div class="slot-slotname">비어있음</div></div>
+            <div class="slot" id="slot-1">➖<div class="slot-slotname">비어있음</div></div>
+            <div class="slot" id="slot-2">➖<div class="slot-slotname">비어있음</div></div>
+            <div class="slot" id="slot-3">➖<div class="slot-slotname">비어있음</div></div>
+            <div class="slot" id="slot-4">➖<div class="slot-slotname">비어있음</div></div>
+        </div>
+
+        <div id="dialogue-box" class="hidden">
+            <img id="portrait" src="heroine_normal.png" alt="주인공">
+            <div id="dialogue-content">
+                <div id="speaker-name">주인공</div>
+                <p id="dialogue-text">...</p>
+                <div class="next-arrow">▼ Space</div>
+            </div>
+        </div>
+
+        <div id="choice-ui" class="hidden">
+            <h3 id="choice-ui-title" class="choice-ui-title">내용</h3>
+            <div id="choice-buttons-box" class="choice-buttons-layout"></div>
+        </div>
+
+        <div id="fade-overlay"></div>
+    </div>
+
+    <script>
+        const roomDoors = {
+            "자취방": { xMin: 60,  xMax: 120, yMin: 380, yMax: 480 }, 
+            "미술실": { xMin: 60,  xMax: 120, yMin: 260, yMax: 360 }, 
+            "교실":   { xMin: 60,  xMax: 120, yMin: 180, yMax: 280 }, 
+            "도서관": { xMin: 670, xMax: 730, yMin: 340, yMax: 440 }, 
+            "사무실": { xMin: 350, xMax: 450, yMin: 480, yMax: 540 }, 
+            "거실":   { xMin: 670, xMax: 730, yMin: 340, yMax: 440 }  
+        };
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const titleScreen = document.getElementById("title-screen");
+        const startBtn = document.getElementById("start-btn");
+        const dialogueBox = document.getElementById("dialogue-box");
+        const dialogueText = document.getElementById("dialogue-text");
+        const portrait = document.getElementById("portrait");
+        const choiceUi = document.getElementById("choice-ui");
+        const choiceTitle = document.getElementById("choice-ui-title");
+        const choiceButtonsBox = document.getElementById("choice-buttons-box");
+        const fadeOverlay = document.getElementById("fade-overlay");
+        const inventoryBox = document.getElementById("inventory-box");
+        const actionGuide = document.getElementById("action-guide");
+
+        let gameState = "TITLE"; 
+        let currentRoomIndex = 1; 
+        let selectedBranch = "";  
+        let dialogueIndex = 0;
+        let currentDialogueArray = [];
+        let effectTimer = 0; 
+        let isTransitioning = false; 
+        let roomInteractionDone = false; 
+        let roomEscapeGuideShown = false; 
+
+        let player = {
+            x: 450, y: 450, speed: 4, width: 48, height: 64,
+            movingUp: false, movingDown: false, movingLeft: false, movingRight: false,
+            direction: "down"
+        };
+
+        let inventory = []; 
+
+        let objectsInRoom = [
+            { name: "가족사진", emoji: "🖼️", x: 290, y: 190, width: 60, height: 50, checked: false, hint: "책상에 놓여있는 소중한 가족사진이다." },
+            { name: "전공책",   emoji: "📚", x: 430, y: 210, width: 60, height: 40, checked: false, hint: "화분 놓여있는 서랍 안에 박혀있는 두꺼운 전공책이다." },
+            { name: "스마트폰", emoji: "📱", x: 550, y: 210, width: 40, height: 40, checked: false, hint: "싱크대 위에 고스란히 놓여있는 스마트폰이다." },
+            { name: "일기장",   emoji: "📔", x: 400, y: 320, width: 50, height: 40, checked: false, hint: "커피와 함께 올려져 있는 일기장이다." },
+            { name: "낡은지갑", emoji: "💼", x: 720, y: 240, width: 50, height: 40, checked: false, hint: "옷장 안, 옷을 뒤져보니 낡은 지갑이 나왔다." }
+        ];
+
+        let roomTargetZone = { x: 0, y: 0, width: 60, height: 60, name: "" };
+
+        const mapImages = {
+            room1: new Image(), livingroom: new Image(), library: new Image(), cyber: new Image(), art: new Image(), classroom: new Image()
+        };
+        mapImages.room1.src = "room1.png";
+        mapImages.livingroom.src = "livingroom.png";
+        mapImages.library.src = "library.png"; // .png 고정 완벽 작동
+        mapImages.cyber.src = "officeroom.png"; 
+        mapImages.art.src = "artroom.png";
+        mapImages.classroom.src = "class.png"; 
+
+        const playerImages = {
+            down: new Image(), up: new Image(), left: new Image(), right: new Image()
+        };
+        playerImages.down.src = "player_down.png";
+        playerImages.up.src = "player_up.png";
+        playerImages.left.src = "player_left.png";
+        playerImages.right.src = "player_right.png";
+
+        startBtn.addEventListener("click", () => {
+            titleScreen.style.opacity = 0;
+            setTimeout(() => { titleScreen.classList.add("hidden"); }, 1000);
+            setTimeout(() => {
+                fadeOverlay.style.opacity = 0; 
+                inventoryBox.classList.remove("hidden"); 
+                setDialogue([
+                    { text: "으음... 여기가 어디지? 자취방인 것 같은데...", portrait: "normal" },
+                    { text: "방 안의 공기가 묘해. 과거의 흔적들이 가구 위에서 반짝이고 있어.", portrait: "normal" },
+                    { text: "방을 빠져나가기 전에 서랍장들을 모두 조사해서 내 소중한 물건 5개를 가방에 채우자! (Space바 조사)", portrait: "normal" }
+                ], "WALK"); 
+            }, 1000);
+        });
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+        function update() {
+            if (gameState !== "WALK") return;
+
+            let nextX = player.x;
+            let nextY = player.y;
+
+            if (player.movingUp) { nextY -= player.speed; player.direction = "up"; }
+            if (player.movingDown) { nextY += player.speed; player.direction = "down"; }
+            if (player.movingLeft) { nextX -= player.speed; player.direction = "left"; }
+            if (player.movingRight) { nextX += player.speed; player.direction = "right"; }
+
+            let canMove = true;
+            if (nextX < 60 || nextX > 730 || nextY < 120 || nextY > 540) {
+                canMove = false;
+            }
+
+            if (currentRoomIndex === 1) {
+                if (nextX > 240 && nextY < 230) canMove = false;
+                if (nextX < 200 && nextY < 210) canMove = false;
+                
+                let doorLimits = roomDoors["자취방"];
+                if (nextX >= doorLimits.xMin && nextX <= doorLimits.xMax && nextY >= doorLimits.yMin && nextY <= doorLimits.yMax && inventory.length < 5) {
+                    canMove = false;
+                    actionGuide.innerText = "🔒 아직 방 안의 추억을 다 채우지 못해 나갈 수 없다.";
+                    actionGuide.classList.remove("hidden");
+                    setTimeout(() => { actionGuide.innerText = "💡 무언가 반짝인다... (Space바 조사)"; }, 2000);
+                }
+            }
+
+            if (canMove) {
+                player.x = nextX;
+                player.y = nextY;
+            }
+
+            if (currentRoomIndex === 1 && !isTransitioning) {
+                let doorLimits = roomDoors["자취방"];
+                let px = player.x + player.width / 2;
+                let py = player.y + player.height / 2;
+                
+                if (inventory.length === 5 && px >= doorLimits.xMin && px <= doorLimits.xMax && py >= doorLimits.yMin && py <= doorLimits.yMax) {
+                    openRoomDiscardUI(); 
+                }
+            } 
+            else if (currentRoomIndex === 2 && roomInteractionDone && !isTransitioning) {
+                checkDoorEscapeRoute();
+            }
+
+            let playerReach = { x: player.x - 30, y: player.y - 30, width: player.width + 60, height: player.height + 60 };
+            let nearSomething = false;
+            if (currentRoomIndex === 1) {
+                objectsInRoom.forEach(obj => { if (!obj.checked && isColliding(playerReach, obj)) nearSomething = true; });
+                if (nearSomething) actionGuide.classList.remove("hidden");
+            } else if (currentRoomIndex === 2 && !roomInteractionDone) {
+                if (isColliding(playerReach, roomTargetZone)) nearSomething = true;
+                if (nearSomething) {
+                    actionGuide.innerText = (selectedBranch === "교실") ? "💡 사물함 자물쇠가 걸려있다... (Space바 조사)" : "💡 무언가 반짝인다... (Space바 조사)";
+                    actionGuide.classList.remove("hidden");
+                } else {
+                    actionGuide.classList.add("hidden");
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 🎬 엔딩 상태일 경우 캔버스 자체 드로잉 처리 (가장 앞 레이어 보장)
+            if (gameState === "END") {
+                ctx.fillStyle = "black"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 최종 엔딩 메인 텍스트 렌더링
+                ctx.fillStyle = "#ffffff"; 
+                ctx.font = "italic 26px sans-serif"; 
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("내가 가장 소중하게 생각한 건... 무엇이지...?", 400, 280);
+
+                // 서브 타이틀 렌더링
+                ctx.fillStyle = "#555555"; 
+                ctx.font = "14px sans-serif";
+                ctx.fillText("- THE END -", 400, 500);
+                return; // 엔딩 화면에서는 플레이어 및 맵을 더 이상 그리지 않음
+            }
+
+            if (currentRoomIndex === 1) {
+                if (mapImages.room1.complete) ctx.drawImage(mapImages.room1, 0, 0, canvas.width, canvas.height);
+                
+                effectTimer++;
+                let pulse = Math.abs(Math.sin(effectTimer * 0.08));
+                objectsInRoom.forEach(obj => {
+                    if (!obj.checked) {
+                        ctx.save(); ctx.globalAlpha = 0.3 + pulse * 0.7; ctx.font = "24px sans-serif";
+                        ctx.fillText("⭐", obj.x + (obj.width/2) - 12, obj.y + (obj.height/2) + 8); ctx.restore();
+                    }
+                });
+            } else if (currentRoomIndex === 2) {
+                let currentBg = mapImages.livingroom;
+                if (selectedBranch === "도서관") currentBg = mapImages.library;
+                else if (selectedBranch === "사무실") currentBg = mapImages.cyber;
+                else if (selectedBranch === "미술실") currentBg = mapImages.art;
+                else if (selectedBranch === "교실") currentBg = mapImages.classroom;
+
+                if (currentBg.complete) ctx.drawImage(currentBg, 0, 0, canvas.width, canvas.height);
+
+                if (!roomInteractionDone) {
+                    effectTimer++;
+                    let pulse = Math.abs(Math.sin(effectTimer * 0.08));
+                    ctx.save(); ctx.globalAlpha = 0.4 + pulse * 0.6; ctx.font = "28px sans-serif";
+                    ctx.fillText("⭐", roomTargetZone.x + (roomTargetZone.width/2) - 14, roomTargetZone.y + (roomTargetZone.height/2) + 10);
+                    ctx.restore();
+                }
+            }
+
+            let currentImg = playerImages[player.direction];
+            if (currentImg.complete && currentImg.naturalWidth !== 0) {
+                ctx.drawImage(currentImg, player.x, player.y, player.width, player.height);
+            } else {
+                ctx.fillStyle = "#ffeb3b"; ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+        }
+
+        let nextStateAfterDialogue = "WALK";
+        function setDialogue(dialogueArray, nextState = "WALK") {
+            gameState = "TALK"; 
+            nextStateAfterDialogue = nextState;
+            dialogueBox.classList.remove("hidden"); 
+            actionGuide.classList.add("hidden");
+            currentDialogueArray = dialogueArray; 
+            dialogueIndex = 0; 
+            displayDialogueText();
+        }
+
+        function displayDialogueText() {
+            const currentLine = currentDialogueArray[dialogueIndex];
+            dialogueText.innerText = currentLine.text;
+            portrait.src = currentLine.portrait === "sad" ? "heroine_sad.png" : "heroine_normal.png";
+        }
+
+        function updateInventoryUI() {
+            const emojiMap = { "가족사진":"🖼️", "전공책":"📚", "스마트폰":"📱", "일기장":"📔", "낡은지갑":"💼" };
+            for (let i = 0; i < 5; i++) {
+                const slot = document.getElementById(`slot-${i}`);
+                if (inventory[i]) { 
+                    let item = inventory[i]; slot.innerHTML = `${emojiMap[item] || "🎁"}<div class="slot-slotname">${item}</div>`; 
+                    slot.style.borderColor = "#ffeb3b"; 
+                } else { 
+                    slot.innerHTML = `➖<div class="slot-slotname">비어있음</div>`; slot.style.borderColor = "#aaa"; 
+                }
+            }
+        }
+
+        function isColliding(r1, r2) { return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x && r1.y < r2.y + r2.height && r1.y + r1.height > r2.y; }
+
+        function handleInteraction() {
+            let playerReach = { x: player.x - 30, y: player.y - 30, width: player.width + 60, height: player.height + 60 };
+            
+            if (currentRoomIndex === 1) {
+                objectsInRoom.forEach(obj => {
+                    if (!obj.checked && isColliding(playerReach, obj)) { 
+                        gameState = "CHOICE"; actionGuide.classList.add("hidden");
+                        choiceTitle.innerHTML = `서랍을 열어보니 <span style="color:#ffeb3b; font-weight:bold;">[${obj.name}]</span>이(가) 보였다.<br>가방에 넣으시겠습니까?`;
+                        choiceButtonsBox.innerHTML = "";
+
+                        const btnYes = document.createElement("button"); btnYes.className = "game-btn"; btnYes.innerText = "예";
+                        btnYes.onclick = () => {
+                            inventory.push(obj.name); obj.checked = true; updateInventoryUI();
+                            choiceUi.classList.add("hidden");
+                            setDialogue([{ text: obj.hint, portrait: "normal" }], "WALK");
+                            if(inventory.length === 5) {
+                                setTimeout(() => { actionGuide.innerText = "🚪 가방이 가득 찼다. 문을 통해 밖으로 나가자."; actionGuide.classList.remove("hidden"); }, 500);
+                            }
+                        };
+                        const btnNo = document.createElement("button"); btnNo.className = "game-btn danger-btn"; btnNo.innerText = "아니오";
+                        btnNo.onclick = () => { choiceUi.classList.add("hidden"); gameState = "WALK"; };
+                        choiceButtonsBox.appendChild(btnYes); choiceButtonsBox.appendChild(btnNo); choiceUi.classList.remove("hidden");
+                    }
+                });
+            } else if (currentRoomIndex === 2 && !roomInteractionDone) {
+                if (isColliding(playerReach, roomTargetZone)) {
+                    if (selectedBranch === "교실") {
+                        player.movingUp = player.movingDown = player.movingLeft = player.movingRight = false;
+                        let inputPw = prompt("사물함 자물쇠 번호를 입력하세요 :");
+                        alert(`[${inputPw || "1234"}] 을(를) 입력했다! 다이얼 자물쇠가 열렸다.`);
+                    }
+                    triggerRoomEvent();
+                }
+            }
+        }
+
+        function openRoomDiscardUI() {
+            gameState = "CHOICE"; 
+            player.movingUp = player.movingDown = player.movingLeft = player.movingRight = false;
+            choiceUi.classList.remove("hidden");
+            
+            if (currentRoomIndex === 1) {
+                choiceTitle.innerHTML = `방을 나가기 위해, <span style="color:#ff4444; font-weight:bold;">가방 속 첫 번째 물건을 하나 비워내야 합니다.</span> 어떤 추억을 정리하시겠습니까?`;
+            } else {
+                choiceTitle.innerHTML = `다음 방으로 전진하기 위해, <span style="color:#ff4444; font-weight:bold;">가방 속 물건을 하나 더 비워내야 합니다.</span>`;
+            }
+            choiceButtonsBox.innerHTML = "";
+
+            inventory.forEach((item, idx) => {
+                const btn = document.createElement("button"); btn.className = "game-btn danger-btn"; btn.innerText = `[비우기] ${item}`;
+                btn.onclick = () => {
+                    inventory.splice(idx, 1);
+                    updateInventoryUI();
+                    choiceUi.classList.add("hidden");
+                    
+                    loadNextBranchRoomRoute(item);
+                };
+                choiceButtonsBox.appendChild(btn);
+            });
+        }
+
+        function loadNextBranchRoomRoute(item) {
+            isTransitioning = true; 
+
+            if (item === "가족사진") selectedBranch = "거실";
+            else if (item === "전공책") selectedBranch = "도서관";
+            else if (item === "스마트폰") selectedBranch = "교실";
+            else if (item === "일기장") selectedBranch = "미술실";
+            else if (item === "낡은지갑") selectedBranch = "사무실";
+
+            fadeOverlay.style.opacity = 1;
+            player.x = 400; player.y = 400; player.direction = "up"; 
+
+            setTimeout(() => {
+                currentRoomIndex = 2; 
+                roomInteractionDone = false; 
+                roomEscapeGuideShown = false; 
+                fadeOverlay.style.opacity = 0;
+                isTransitioning = false; 
+
+                let enterMsg = "";
+                if (selectedBranch === "거실") {
+                    enterMsg = "🏠 여기는 거실이다.";
+                    roomTargetZone = { x: 370, y: 440, width: 60, height: 60, name: "거실 식탁 별" };
+                } else if (selectedBranch === "도서관") {
+                    enterMsg = "📚 여기는 도서관이다.";
+                    roomTargetZone = { x: 120, y: 160, width: 60, height: 60, name: "도서관 책상 별" };
+                } else if (selectedBranch === "교실") {
+                    enterMsg = "🏫 여기는 교실이다.";
+                    roomTargetZone = { x: 620, y: 160, width: 60, height: 60, name: "사물함 별" };
+                } else if (selectedBranch === "미술실") {
+                    enterMsg = "🎨 여기는 미술실이다.";
+                    roomTargetZone = { x: 370, y: 150, width: 60, height: 60, name: "미술실 서랍장 별" };
+                } else if (selectedBranch === "사무실") {
+                    enterMsg = "💼 여기는 사무실이다.";
+                    roomTargetZone = { x: 120, y: 280, width: 60, height: 60, name: "회사 책상 별" };
+                }
+
+                setDialogue([{ text: enterMsg, portrait: "normal" }], "WALK");
+            }, 1200);
+        }
+
+        function triggerRoomEvent() {
+            gameState = "TALK";
+            player.movingUp = player.movingDown = player.movingLeft = player.movingRight = false;
+            actionGuide.classList.add("hidden");
+
+            let dialogs = [];
+            if (selectedBranch === "미술실") {
+                dialogs = [
+                    { text: "거울 옆에 놓인 자화상 그림을 가만히 들여다보았다...", portrait: "normal" },
+                    { text: "과거 내 모습이 담긴 캔버스를 보니 가슴이 먹먹해진다.", portrait: "sad" }
+                ];
+            } else if (selectedBranch === "도서관") {
+                dialogs = [
+                    { text: "책상 위에 펼쳐진 낡은 책 한 권을 읽어내려 갔다...", portrait: "normal" },
+                    { text: "밤을 지새우며 밑줄을 긋던 내 집념의 흔적들이 적혀있다. 한참을 바라보다 가방을 고쳐 멘다.", portrait: "normal" }
+                ];
+            } else if (selectedBranch === "교실") {
+                dialogs = [
+                    { text: "사물함 안쪽에서 고등학교 시절 친구들과 찍은 먼지 쌓인 사진을 발견했다.", portrait: "normal" },
+                    { text: "서로 다른 꿈을 꾸며 눈부시게 웃고 있는 얼굴들... 소중한 추억의 단면이다.", portrait: "normal" }
+                ];
+            } else if (selectedBranch === "거실") {
+                dialogs = [
+                    { text: "식탁 위에 놓인 추억을 바라보자, 가구 위로 모락모락 피어오르는 찌개 냄새와 가족들의 대화소리가 상상으로 밀려온다.", portrait: "normal" },
+                    { text: "언제나 내 편이 되어 따뜻하게 밥을 챙겨주던 가족들의 온기가 귓가를 스친다.", portrait: "normal" }
+                ];
+            } else if (selectedBranch === "사무실") {
+                dialogs = [
+                    { text: "책상 앞에 멈춰 서자, 숨이 턱 막히는 무거운 분위기와 함께 상사에게 호되게 깨지던 과거의 상상이 피어오른다.", portrait: "sad" },
+                    { text: "부족함에 눈물 흘렸던 날들이었지만, 그 고난을 버텨내며 내가 성장해왔음을 마주한다.", portrait: "normal" }
+                ];
+            }
+
+            setDialogue(dialogs, "SET_INTERACTION_DONE");
+        }
+
+        function checkDoorEscapeRoute() {
+            let limits = roomDoors[selectedBranch];
+            if (!limits) return;
+
+            let px = player.x + player.width / 2;
+            let py = player.y + player.height / 2;
+
+            if (px >= limits.xMin && px <= limits.xMax && py >= limits.yMin && py <= limits.yMax) {
+                isTransitioning = true; 
+
+                if (inventory.length === 0) {
+                    triggerEndingScreen();
+                } else {
+                    player.x = 400; player.y = 400;
+                    isTransitioning = false;
+                    openRoomDiscardUI(); 
+                }
+            }
+        }
+
+        // 🎬 [버그 완전 수리부]: 글자가 무조건 보이도록 레이아웃 가림 현상 완치
+        function triggerEndingScreen() {
+            currentRoomIndex = 3; 
+            gameState = "END"; // 게임 루프 내 draw()에서 하이재킹하여 글씨를 쓰도록 유도
+            
+            // 모든 UI 박스 완벽하게 숨김
+            dialogueBox.classList.add("hidden"); 
+            actionGuide.classList.add("hidden");
+            inventoryBox.classList.add("hidden"); 
+            choiceUi.classList.add("hidden");
+            
+            // 🌟 캔버스를 가려버리던 흑막 overlay 레이어를 아예 삭제/치워버려서 글자가 보이도록 처리!
+            fadeOverlay.classList.add("hidden");
+            fadeOverlay.style.display = "none";
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
+                if (gameState === "TALK") {
+                    dialogueIndex++;
+                    if (dialogueIndex < currentDialogueArray.length) {
+                        displayDialogueText();
+                    } else { 
+                        dialogueBox.classList.add("hidden"); 
+                        if (nextStateAfterDialogue === "SET_INTERACTION_DONE") {
+                            roomInteractionDone = true; 
+                            if (!roomEscapeGuideShown) {
+                                roomEscapeGuideShown = true; 
+                                setDialogue([{ text: `💡 이 방의 소중한 의미를 정리했다. 지정된 문 위치로 이동하여 밖으로 나가자.`, portrait: "normal" }], "WALK");
+                            } else {
+                                gameState = "WALK";
+                            }
+                        } else {
+                            gameState = nextStateAfterDialogue; 
+                        }
+                    }
+                    return;
+                }
+            }
+            if (gameState === "WALK") {
+                if (e.code === "ArrowUp" || e.code === "KeyW") player.movingUp = true;
+                if (e.code === "ArrowDown" || e.code === "KeyS") player.movingDown = true;
+                if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = true;
+                if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = true;
+                if (e.code === "Space") handleInteraction();
+            }
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (gameState === "WALK") {
+                if (e.code === "ArrowUp" || e.code === "KeyW") player.movingUp = false;
+                if (e.code === "ArrowDown" || e.code === "KeyS") player.movingDown = false;
+                if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = false;
+                if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = false;
+            }
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>

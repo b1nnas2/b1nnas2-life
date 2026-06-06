@@ -23,7 +23,7 @@
         #start-btn { padding: 15px 40px; font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.7); color: white; border: 2px solid white; cursor: pointer; border-radius: 5px; margin-top: 150px; }
         #start-btn:hover { background: white; color: black; }
 
-        /* 대화창 UI */
+        
         #dialogue-box { position: absolute; bottom: 20px; left: 20px; width: 760px; height: 160px; background-color: rgba(0, 0, 0, 0.9); border: 3px solid #fff; border-radius: 5px; display: flex; z-index: 10; }
         #portrait { position: absolute; bottom: 0; left: 20px; width: 140px; height: auto; z-index: 11; }
         #dialogue-content { margin-left: 180px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
@@ -31,15 +31,15 @@
         #dialogue-text { font-size: 16px; line-height: 1.5; }
         .next-arrow { text-align: right; font-size: 12px; color: #aaa; }
 
-        /* 인벤토리 UI */
+        
         #inventory-box { position: absolute; top: 20px; right: 20px; display: flex; gap: 8px; z-index: 5; }
         .slot { width: 55px; height: 55px; background: rgba(0, 0, 0, 0.8); border: 2px solid #aaa; border-radius: 5px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; position: relative; }
         .slot-slotname { font-size: 9px; color: #ccc; margin-top: 2px; }
 
-        /* 상호작용 안내 가이드 */
+        
         #action-guide { position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); border: 1px solid #ffeb3b; padding: 8px 20px; border-radius: 20px; font-size: 14px; color: #ffeb3b; z-index: 9; }
 
-        /* 선택지 UI */
+        
         #choice-ui { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 15, 0.95); border: 2px solid #ffeb3b; padding: 25px; width: 420px; text-align: center; z-index: 20; border-radius: 5px; }
         .choice-ui-title { font-size: 16px; margin-bottom: 20px; color: #fff; line-height: 1.5; }
         .choice-buttons-layout { display: flex; flex-direction: column; gap: 10px; }
@@ -143,7 +143,7 @@
         };
         mapImages.room1.src = "room1.png";
         mapImages.livingroom.src = "livingroom.png";
-        mapImages.library.src = "library.png"; // .png 고정 완벽 작동
+        mapImages.library.src = "library.png"; 
         mapImages.cyber.src = "officeroom.png"; 
         mapImages.art.src = "artroom.png";
         mapImages.classroom.src = "class.png"; 
@@ -238,23 +238,23 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 🎬 엔딩 상태일 경우 캔버스 자체 드로잉 처리 (가장 앞 레이어 보장)
+            
             if (gameState === "END") {
                 ctx.fillStyle = "black"; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // 최종 엔딩 메인 텍스트 렌더링
+                
                 ctx.fillStyle = "#ffffff"; 
                 ctx.font = "italic 26px sans-serif"; 
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText("내가 가장 소중하게 생각한 건... 무엇이지...?", 400, 280);
 
-                // 서브 타이틀 렌더링
+                
                 ctx.fillStyle = "#555555"; 
                 ctx.font = "14px sans-serif";
                 ctx.fillText("- THE END -", 400, 500);
-                return; // 엔딩 화면에서는 플레이어 및 맵을 더 이상 그리지 않음
+                return; 
             }
 
             if (currentRoomIndex === 1) {
@@ -484,18 +484,18 @@
             }
         }
 
-        // 🎬 [버그 완전 수리부]: 글자가 무조건 보이도록 레이아웃 가림 현상 완치
+        
         function triggerEndingScreen() {
             currentRoomIndex = 3; 
-            gameState = "END"; // 게임 루프 내 draw()에서 하이재킹하여 글씨를 쓰도록 유도
+            gameState = "END"; 
             
-            // 모든 UI 박스 완벽하게 숨김
+            
             dialogueBox.classList.add("hidden"); 
             actionGuide.classList.add("hidden");
             inventoryBox.classList.add("hidden"); 
             choiceUi.classList.add("hidden");
             
-            // 🌟 캔버스를 가려버리던 흑막 overlay 레이어를 아예 삭제/치워버려서 글자가 보이도록 처리!
+            
             fadeOverlay.classList.add("hidden");
             fadeOverlay.style.display = "none";
         }
